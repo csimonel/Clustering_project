@@ -1,0 +1,537 @@
+---
+title: "Assignment 2"
+author: "Simona_Cernat"
+date: "2023-01-15"
+output: html_document
+---
+
+
+## INTRODUCTION
+
+The data is part of a study which investigates the brain (cortex) protein expression pattern of several mice in various conditions. In this data set the conditions are represented by the variables: Genotype, Behaviour, Treatment and class (combination of all three). The first distinction between mice was the Genotype: "control" healthy mice were compared to the "trisomic mice" which constitute the animal models for the Down Syndrome (characterized by impaired learning abilities). They were further selected based on the Behavior feature: mice were stimulated to learn a task - CS (context shock) while others were not - SC. Additionally, about half of the mice were given memantine, a drug which promotes learning recovery, or a saline solution, which acts as control and has no effect. The mice where divided in 8 groups/ classes:  \ 
+
+Classes:\ 
+
+- c-CS-s: control mice, stimulated to learn, injected with saline \ 
+- c-CS-m: control mice, stimulated to learn, injected with memantine \ 
+- c-SC-s: control mice, not stimulated to learn, injected with saline \ 
+- c-SC-m: control mice, not stimulated to learn, injected with memantine \ 
+
+- t-CS-s: trisomy mice, stimulated to learn, injected with saline \ 
+- t-CS-m: trisomy mice, stimulated to learn, injected with memantine \ 
+- t-SC-s: trisomy mice, not stimulated to learn, injected with saline \ 
+- t-SC-m: trisomy mice, not stimulated to learn, injected with memantine \ 
+
+- 38 control mice and 34 trisomic \ 
+
+
+The protein expression is measured for 77 proteins. There are 15 measurements for each protein/mouse combination. The aim of the study was to indefity the proteins that are relevant and significantly different for the classes.
+
+
+## Data cleaning
+
+```{r, `results = FALSE`, message=FALSE, warning=FALSE}
+# Load the packages needed
+library(tidyverse)
+library( readxl )
+library(patchwork)
+library(ggdendro)
+library(fpc)
+library(mclust)
+library(dendextend)
+library(fossil)
+library(cluster)
+```
+
+
+
+```{r }
+# Load the dataset
+set.seed(227)
+ds1 <- read_excel("./raw_data/Data_Cortex_Nuclear.xls")
+
+#Transform the dataset into a tibble and tranform into factors where appropiate
+
+ds1 <- as_tibble(ds1)
+ds1 <- ds1 %>%
+  mutate(Genotype = as.factor(Genotype)) %>% 
+  mutate(Treatment= as.factor(Treatment)) %>% 
+  mutate(Behavior = as.factor(Behavior)) %>% 
+  mutate(class = as.factor(class))
+
+```
+
+## a) Missing values
+
+First the dataset will be checked for missing values.
+
+```{r }
+#Looking at the missing values
+sapply(ds1, function(x) sum(is.na(x))) 
+
+#Tidyverse version
+#ds1 %>%  
+  #map(is.na) %>%
+  #map(sum) %>% 
+  #bind_cols()
+
+
+#All the rows that have missing values
+ds1 %>% filter_all(any_vars(is.na(.))) %>% nrow()
+  
+
+#aprox 530 of them have a missing value 
+```
+
+
+Aprox 530/1080 of mice/rows have at least 1 missing data. Given the high number of NAs, imputing the data seems like a better strategy than deleting the rows that have a missing value. 
+
+Next, data imputation will be performed by converting the NAs to the mean of the selected columns with respect to the individual condition/class.
+
+
+```{r , warning=FALSE}
+#Table with the means per protein per individual class
+Means <- ds1 %>% 
+  filter(complete.cases(.)) %>% 
+  group_by(class) %>% 
+  summarise_all(mean) %>% 
+  select(-MouseID, -Treatment, -Behavior)
+  
+
+
+
+  
+  
+  
+```
+
+
+```{r}
+#Little bit of code for data imputation 
+imputed_ds = ds1
+
+#iterates through row and column, checks for missing values and if the missing value is found is replaced by value in Means
+for (i in 1:nrow(imputed_ds)) {
+  for (col in names(imputed_ds)) {
+    if (!(col %in% c("MouseID", "Treatment", "Behavior", "class")) && (is.na(imputed_ds[i, col]))) {
+      imputed_ds[i, col] = (Means %>% filter(class == imputed_ds[i, "class"]$class))[[col]]
+    }
+  } 
+}
+
+imputed_ds %>% filter_all(any_vars(is.na(.))) %>% nrow()
+ds1 %>% filter_all(any_vars(is.na(.))) %>% nrow()
+
+
+```
+
+## b) Normalization
+
+As a last step data cleaning, the data set will be normalized. While the data is on the same scale of measurement, for some clustering methods, such as k-means clustering, the results might be heavily influenced by greater values. To perform well, k-means clustering assumes equal variances because the algorithm tends to create "round" clusters. If the variance is left unequal then clusters will separate more around the variables with greater variance.
+
+For example in the summary below it can be seen that some protein values vary more.
+
+
+```{r }
+imputed_ds %>% summarise_if(is.numeric, var)
+```
+
+Below I will normalize the data using z-score normalization which will bring all variances to 1.
+
+```{r }
+# z-score normalization
+imputed_nr <- select_if(imputed_ds, is.numeric)
+imputed_chr <- select_if(imputed_ds, is.factor)
+s_imputed_ds <- scale(imputed_nr)
+
+ds_normalized <- cbind(imputed_chr, s_imputed_ds)
+
+rm(imputed_nr, imputed_chr)
+```
+
+```{r }
+
+```
+
+
+
+```{r }
+#There are two data sets that I will use further. The normalized and the un-normalized one
+#saveRDS(ds_normalized, file = "ds_normalized.rds")
+#saveRDS(imputed_ds, file = "imputed_ds.rds")
+```
+
+```{r }
+#Here the two data sets can be re-read
+
+ds_normalized <- readRDS("./processed_data/ds_normalized.rds")
+imputed_ds <- readRDS("./processed_data/imputed_ds.rds")
+
+```
+
+
+# Clustering
+
+There is a high number of features. To address this issue PCA will be performed.
+
+```{r }
+
+norm_pca <- prcomp(ds_normalized %>% select(-Treatment, -class, -Behavior, -Genotype), center = TRUE, scale = TRUE)
+
+summary(norm_pca)
+
+# Add the class labels to the PCA results
+ds_normalized$PC1 <- norm_pca$x[,1]
+ds_normalized$PC2 <- norm_pca$x[,2]
+  
+# Create a scatter plot of PC1 vs PC2 colored by class
+pcaplot1 <- ggplot(ds_normalized, aes(x = PC1, y = PC2, color = class)) +
+  theme_minimal() +
+  ggtitle("PC1 vs PC2: complete class separation") +
+  geom_point()
+
+pcaplot2 <- ggplot(ds_normalized, aes(x = PC1, y = PC2, color = Behavior)) +
+  theme_minimal() +
+  geom_point() +
+  ggtitle("PC1 vs PC2: CS vs SC") 
+  
+
+pcaplot1 + pcaplot2 +
+  plot_layout(ncol = 1, nrow = 2)
+
+```
+
+There is not a clear separation between classes, on the contrary, they quite overlap in the middle. It is noticeable that there is a division between the CS and SC groups, meaning the state of learning vs not-learning produced the most differences in gene expression. Of course, this is just plotting on two dimensions. Additionally, these are the results of PCA but other dimensionality reduction methods such as t-SNE might give better results.
+
+Usually a clear separation between clusters is desired but here from a biological perspective we expect some overlap. We expect mice that behave similarly to have similar protein expression patterns. The study presents the trisomic (naturally learning disability groups) and the control mice. The trisomic CS mice injected with saline did not learn the task but the group injected with the memantine did. The control CS mice learn equally well regardless of the injection. Therefore we expect t-CS-s vs t-CS-m to be different but the c-CS-s vs c-CS-m to be similar. The former cannot be noticed here. The differences between CS vs SC produce too much noise to be able to distinguish other dissimilarities.
+
+
+## A. k-means clustering
+
+I will use the PCs that explain at least 90% of the variation.
+
+```{r }
+#K means clustering
+
+#The first 21 PCs add up to aprox 90% of the variation
+norm_pca21 <- norm_pca$x[, 1:21]
+norm_pca21 <- as_tibble(norm_pca21)
+
+model_k8 <-kmeans(norm_pca21, center = 8)
+model_k2 <- kmeans(norm_pca21, center = 2)
+
+plot_k8 <- norm_pca21 %>% mutate(clu  = as_factor(model_k8$cluster)) %>% 
+  ggplot(mapping = aes(x = PC1, y = PC2)) + 
+  geom_point(aes(color = clu)) +
+  theme_minimal() +
+  scale_fill_viridis_d(guide = "none")+
+  ggtitle("k-means clustering - 8 classes")
+
+plot_k2 <- norm_pca21 %>% mutate(clu  = as_factor(model_k2$cluster)) %>% 
+  ggplot(mapping = aes(x = PC1, y = PC2)) + 
+  geom_point(aes(color = clu)) + 
+  theme_minimal() +
+  scale_fill_viridis_d(guide = "none") +
+  ggtitle("k-means clustering - 2 classes")
+
+plot_k8 + plot_k2 +
+  plot_layout(ncol = 1, nrow = 2)
+
+
+```
+
+
+```{r }
+#K-means - Stability test
+boot_test <- clusterboot(data = norm_pca21, B = 1000, clustermethod = kmeansCBI, k = 8, 
+                      count = FALSE)
+
+boot_test2 <- clusterboot(data = norm_pca21, B = 1000, clustermethod = kmeansCBI, k = 2, 
+                      count = FALSE)
+
+boot_test$bootmean
+boot_test2$bootmean
+
+
+
+```
+
+8 clusters: It can be noticed that the clusters look a little bit more well-distinguishable but different from the PCA plot above.  By consulting the stability measurement, the stability of the clusters seems low. In other words, the clusters are to a certain degree randomly assigned. However, this is to be expected as there does not seem to be a clear separation between the 8 classes.
+
+However it is noticeable that the data is more readily identified by the CS/SC groups. When testing weather the 2 clusters can be captured by the k-means algorithm, we notice that this does not happen and the wrong clusters are assigned respective to the actual groups
+
+From now on, I will drop trying to recreate the 8 classes, instead I will only use the two CS/SC separation.
+
+
+I will next calculate some metrics that assess the quality of the clusters. **In an unsupervised project usually the true labels are not known. However, given that the true labels are given I will employ them to test the external validity of the clusters. This would be my primary goal from now on.** Therefore I will use the Rand Index (ARI) to compare the similarity between the true labels and the predicted classes/ clusters. It ranges from 1 to -1, with 1 being a perfect match.
+
+```{r }
+#K-means - Rand Index
+
+adjustedRandIndex(as.vector(imputed_ds %>% mutate(Behavior = ifelse(Behavior == "C/S", 1, 2)) %>% select(Behavior))[[1]], model_k2$cluster )
+
+```
+
+
+
+
+
+Confirm what had been observed above. The two clusters do not reproduce the cs/sc classes.
+
+
+
+## Part B - Hierarchical correlation-based clustering
+
+
+Next, I will focus my attention on hierarchical clustering. My opinion is that this type of clustering will render better results compared to k-means. In k-means, the Euclidean distance is used. I believe a better metric for expression data is correlation between the samples/mice.
+
+Note: for this I will use the unnormalized data set. That is because this type of clustering is free from the assumptions of the k-means clustering. Additionally, I will not use the principal components to compute the distances as this would probably be wrong. We are interested in how samples' protein expression correlate with each other.
+
+```{r }
+#Hierarchical clustering -Correlation
+
+#calculate the correlation matrix between each sample/mice (per row)
+cor <- imputed_ds %>% 
+  select(-class, - Genotype, -Behavior, -Treatment, -MouseID) %>%   
+  #use the transpose to calculate the correlation per row and not column
+  t() %>% 
+  cor(method = "spearman" , use="pairwise.complete.obs")
+
+#tried a measure of dissimilarity instead of similarity 
+dist_sperman <- as.dist(1 - cor)
+
+sperman_tree <- hclust(dist_sperman, method="complete")
+
+clus_2 <- as_factor(cutree(sperman_tree, 2))
+
+
+plot(sperman_tree)
+
+
+
+
+```
+
+
+
+
+```{r }
+#Visualising the clusters on the PC plot
+p2_spel <- ds_normalized %>%  
+  ggplot(aes(x = PC1, y = PC2, colour = clus_2)) + 
+  scale_fill_brewer(palette = 1) +
+  geom_point() + 
+  ggtitle("Correlation-based hierachical clustering - 2 clusters") + 
+  theme(legend.position = "n") +
+  theme_minimal() +
+  coord_fixed() 
+  
+
+p2_spel
+```
+
+
+```{r }
+#For comparison with the true CS/SC classes
+pcaplot2
+```
+
+The clustering looks very similar to the true classes on the PCA plot.
+
+
+```{r }
+#Assessment of the clusters
+#Rand index
+
+adjustedRandIndex(as.vector(imputed_ds %>% mutate(Behavior = ifelse(Behavior == "C/S", 1, 2)) %>% select(Behavior))[[1]], clus_2 )
+
+
+```
+
+
+Given that 1 is the maximum obtainable score, n almost 0.9 is pretty good, meaning that the clusters are representative of the CS/SC classes.
+
+
+Another metric I would like to use is the silhouette score, which measures the similarity ob an observation to its own cluster compared to other clusters. It takes values between 0 and 1, with a higher value indicating the better score.
+
+```{r }
+sil_samples <- silhouette(as.integer(clus_2), dist(imputed_ds %>% select(-class, - Genotype, -Behavior, -Treatment, -MouseID)))
+
+mean(sil_samples[, 3])
+```
+
+This score is quite low but overall not too bad (they are mostly dissimilar to each other) and could be due to the fact that the clusters overlap to a certain degree in the middle, despite the clear separation at the periphery.
+
+
+
+
+## Discussion
+
+In this assignment I used clustering methods in order to find patterns in the data. However, I did not focus on finding the relevant proteins that discriminate between classes, as I believed this is beyond the scope of this assignment. I could have chosen just the proteins/ features which showed the most variance and discard the 'stable' ones for this analysis, as this strategy would probably minimize the noise. I chose not to do this and just try the best I can to discover the patterns in the data. This data set had a high number of features (~80). To reduce  the number of features, I used PCA. It became intuitive that a clear distinction between the 8 classes/ conditions is almost impossible. However, the CS vs SC groups can be well separated to a certain degree. 
+
+I chose to perform k-means clustering using the first 21 principal components, which explained 90% of the variation. As expected, the 8 classes cannot be well separated. Then I looked more into the CS vs SC separation, which in best case scenario would render the same outputs as the PCA plots. While in most unsupervised learning projects the true labels are not known, in this assignment I focused on choosing a clustering method that achieves the most accurate results in the 2 cluster scenario as opposed to the best separability. For the two clusters scenario, it is noticeable by looking at the plot and by consulting the Rand Index that the two clusters selected by k-means are distinct to the actual CS/SC classes. Additionally, the bootstrapped stability score is pretty low, meaning that the clusters are not even stable across multiple iterations. 
+k-means clustering assumes spherical clusters but this might not be the case with these data.
+
+Then correlation-based hierarchical clustering was performed. Intuitively, this would suit the data best. From a biological point of view, proteins in a certain state/tissue tend to co-express together. Indeed this seemed to be the case. 2 clusters that could correspond to CS/SC can be seen. The Rand Index shows a good similarity score compared to the actual classes. The Silhouette score was further used to asses how dissimilar the two clusters are. The score tells that there is some overlap, which can be also confirmed visually. 
+
+In this assignment, the focus was on clustering methods that rendered output close to the true labels of the data (external validity), in a semi-supervised fashion. To test the similarity I have used the rand index and visualization by plotting. Each clustering method was further assessed for different metrics and qualities. For this type of data and question, correlation-based hierarchical clustering rendered the most similar results to the true classes while the k-means clustering strategy failed to do so.
+
+
+
+
+
+```{r }
+
+```
+
+
+
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+```{r }
+
+```
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+
+```{r }
+
+```
+
+
+
+```{r }
+
+```
+
+
+
+```{r }
+
+```
