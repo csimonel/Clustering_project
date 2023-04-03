@@ -365,6 +365,10 @@ pre code {
 
 <div id="introduction" class="section level2">
 <h2>INTRODUCTION</h2>
+<p>In this assignment I will try to find patterns in the data using
+clustering methods. The results for each method will be compared.</p>
+<p>The data, its descriptions and its parent study can all be found <a href="https://archive.ics.uci.edu/ml/datasets/Mice+Protein+Expression">here</a>
+.</p>
 <p>The data is part of a study which investigates the brain (cortex)
 protein expression pattern of several mice in various conditions. In
 this data set the conditions are represented by the variables: Genotype,
@@ -550,8 +554,7 @@ imputed_ds &lt;- readRDS(&quot;./processed_data/imputed_ds.rds&quot;)</code></pr
 </div>
 <div id="clustering" class="section level1">
 <h1>Clustering</h1>
-<p>There is a high number of features. To address this issue PCA will be
-performed.</p>
+<!-- There is a high number of features. To address this issue PCA will be performed. -->
 <pre class="r"><code>norm_pca &lt;- prcomp(ds_normalized %&gt;% select(-Treatment, -class, -Behavior, -Genotype), center = TRUE, scale = TRUE)
 
 summary(norm_pca)</code></pre>

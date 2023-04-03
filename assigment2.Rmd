@@ -2,11 +2,17 @@
 title: "Assignment 2"
 author: "Simona_Cernat"
 date: "2023-01-15"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 
 ## INTRODUCTION
+
+In this assignment I will try to find patterns in the data using clustering methods. The results for each method will be compared.
+
+The data, its descriptions and its parent study can all be found [here](https://archive.ics.uci.edu/ml/datasets/Mice+Protein+Expression) .
 
 The data is part of a study which investigates the brain (cortex) protein expression pattern of several mice in various conditions. In this data set the conditions are represented by the variables: Genotype, Behaviour, Treatment and class (combination of all three). The first distinction between mice was the Genotype: "control" healthy mice were compared to the "trisomic mice" which constitute the animal models for the Down Syndrome (characterized by impaired learning abilities). They were further selected based on the Behavior feature: mice were stimulated to learn a task - CS (context shock) while others were not - SC. Additionally, about half of the mice were given memantine, a drug which promotes learning recovery, or a saline solution, which acts as control and has no effect. The mice where divided in 8 groups/ classes:  \ 
 
@@ -172,7 +178,7 @@ imputed_ds <- readRDS("./processed_data/imputed_ds.rds")
 
 # Clustering
 
-There is a high number of features. To address this issue PCA will be performed.
+<!-- There is a high number of features. To address this issue PCA will be performed. -->
 
 ```{r }
 
