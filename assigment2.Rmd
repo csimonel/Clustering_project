@@ -14,7 +14,7 @@ In this assignment I will try to find patterns in the data using clustering meth
 
 The data, its descriptions and its parent study can all be found [here](https://archive.ics.uci.edu/ml/datasets/Mice+Protein+Expression) .
 
-This dataset is part of a research study that aims to investigate the protein expression patterns in the cortex of multiple mice under various experimental conditions. The dataset includes four variables: Genotype, Behaviour, Treatment, and Class, which represents the combination of all three. The mice were initially categorized based on their Genotype, which involved a comparison between "control" healthy mice and "trisomic mice," which serve as animal models for Down Syndrome and display impaired learning abilities. Further selection was based on the Behaviour feature, where mice were either stimulated to learn a task - CS (context shock) or not - SC. In addition, approximately half of the mice received memantine, a drug that promotes learning recovery, while the other half were given a saline solution that acted as a control and had no effect. The mice were subsequently divided into eight groups/classes based on these factors.
+This dataset is part of a research study that aims to investigate the expression patterns in the cortex of multiple mice under various experimental conditions. The dataset includes four variables: Genotype, Behaviour, Treatment, and Class, which represents the combination of all three. The mice were initially categorized based on their Genotype, which involved a comparison between "control" healthy mice and "trisomic mice," which serve as animal models for Down Syndrome and display impaired learning abilities. Further selection was based on the Behaviour feature, where mice were either stimulated to learn a task - CS (context shock) or not - SC. In addition, approximately half of the mice received memantine, a drug that promotes learning recovery, while the other half were given a saline solution that acted as a control and had no effect. The mice were subsequently divided into eight groups/classes based on these factors.
 Classes:\ 
 
 - c-CS-s: control mice, stimulated to learn, injected with saline \ 
@@ -30,7 +30,7 @@ Classes:\
 - 38 control mice and 34 trisomic \ 
 
 
-The protein expression is measured for 77 proteins. There are 15 measurements for each protein/mouse combination. The aim of the study was to indefity the proteins that are relevant and significantly different for the classes.
+The expression is measured for 77 genes. There are 15 measurements for each gene/mouse combination. The aim of the study was to indefity the proteins that are relevant and significantly different for the classes.
 
 
 ## Data cleaning
